@@ -1,7 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+talking_avatar_backend/node_modules/
+talking_avatar_frontend/node_modules/
 /.pnp
 .pnp.js
 
@@ -26,5 +27,4 @@ yarn-error.log*
 configurations/*
 
 .env
-public/speech*
 talking_avatar_backend/public/speech*

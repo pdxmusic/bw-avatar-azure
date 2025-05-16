@@ -13,20 +13,15 @@ import 'react-toastify/dist/ReactToastify.css';
 import createAnimation from './converter';
 import blinkData from './blendDataBlink.json';
 
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+
 import './App.css'
 
 import * as THREE from 'three';
 import axios from 'axios';
 const _ = require('lodash');
 
-////!-----------
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
-const BASE_URL = 'https://dev.brainyware.ai/bw-avatar';
-let firstAudioUrl = null;
-let firstBlendData = null;
-////!-----------
+const host = 'https://dev.brainyware.ai/bw-avatar/';
 
 function Avatar({ avatar_url, playing, setLoad, blendData }) {
 
@@ -50,20 +45,20 @@ function Avatar({ avatar_url, playing, setLoad, blendData }) {
     hairNormalTexture,
     hairRoughnessTexture,
   ] = useTexture([
-    `${process.env.PUBLIC_URL}/images/body.webp`,
-    `${process.env.PUBLIC_URL}/images/eyes.webp`,
-    `${process.env.PUBLIC_URL}/images/teeth_diffuse.webp`,
-    `${process.env.PUBLIC_URL}/images/body_specular.webp`,
-    `${process.env.PUBLIC_URL}/images/body_roughness.webp`,
-    `${process.env.PUBLIC_URL}/images/body_normal.webp`,
-    `${process.env.PUBLIC_URL}/images/teeth_normal.webp`,
-    `${process.env.PUBLIC_URL}/images/h_color.webp`,
-    `${process.env.PUBLIC_URL}/images/tshirt_diffuse.webp`,
-    `${process.env.PUBLIC_URL}/images/tshirt_normal.webp`,
-    `${process.env.PUBLIC_URL}/images/tshirt_roughness.webp`,
-    `${process.env.PUBLIC_URL}/images/h_alpha.webp`,
-    `${process.env.PUBLIC_URL}/images/h_normal.webp`,
-    `${process.env.PUBLIC_URL}/images/h_roughness.webp`,
+    "/images/body.webp",
+    "/images/eyes.webp",
+    "/images/teeth_diffuse.webp",
+    "/images/body_specular.webp",
+    "/images/body_roughness.webp",
+    "/images/body_normal.webp",
+    "/images/teeth_normal.webp",
+    "/images/h_color.webp",
+    "/images/tshirt_diffuse.webp",
+    "/images/tshirt_normal.webp",
+    "/images/tshirt_roughness.webp",
+    "/images/h_alpha.webp",
+    "/images/h_normal.webp",
+    "/images/h_roughness.webp",
   ]);
 
   _.each([
@@ -169,7 +164,7 @@ function Avatar({ avatar_url, playing, setLoad, blendData }) {
 
   const mixer = useMemo(() => new THREE.AnimationMixer(gltf.scene), [gltf.scene]);
 
-  let idleFbx = useFBX(`${process.env.PUBLIC_URL}/idle.fbx`);
+  let idleFbx = useFBX('/idle.fbx');
   let { clips: idleClips } = useAnimations(idleFbx.animations);
 
   idleClips[0].tracks = _.filter(idleClips[0].tracks, track => {
@@ -246,7 +241,7 @@ function Avatar({ avatar_url, playing, setLoad, blendData }) {
 }
 
 function makeSpeech(text) {
-  return axios.post(BASE_URL + '/api/talk', { text });
+  return axios.post(host + '/talk', { text });
 }
 
 const STYLES = {
@@ -264,7 +259,6 @@ function App() {
   const [load, setLoad] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [visits, setVisits] = useState("--");
-  const [showStartLayer, setShowStartLayer] = useState(true); 
 
   const audioPlayer = useRef();
   const [latestResponse, setLatestResponse] = useState(null);
@@ -274,110 +268,9 @@ function App() {
   const [playing, setPlaying] = useState(false);
   const [blendData, setBlendData] = useState([]);
 
-  const [sessionToken, setSessionToken] = useState(null)
+  const getResposnse = async (userInput) => {
+    if (!userInput.trim()) return;
 
-  console.log('load:', load)
-
-  const handleStart = async () => {
-    
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder =  new MediaRecorder(stream);
-    
-    setShowStartLayer(false);
-    setBlendData(firstBlendData || []);
-    setAudioSource(firstAudioUrl);
-    setSpeak(true);
-  };
-  
-  const startRecording = async () => {
-    console.log('starting')
-    try {
-      audioChunks = [];
-  
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-          audioChunks.push(event.data);
-          const blob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
-          const formData = new FormData();
-          formData.append('audio', blob, 'audio.webm');
-          formData.append('token', sessionToken);
-          formData.append('language', 'it');
-
-          try {
-            const response = await fetch(`${BASE_URL}/api/transcribe`, {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (!response.ok) {
-              throw new Error(`Transcription API error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            console.log(mediaRecorder, isRecording)
-            console.log('Transcription:', data.text);
-
-            setMsg((prevMsg) => `${data.text}`);
-          } catch (error) {
-            console.error('Error during transcription:', error);
-          }
-              }
-      };
-  
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
-        const formData = new FormData();
-        formData.append('audio', blob, 'audio.webm');
-        formData.append('token', sessionToken);
-        formData.append('language', 'it');
-  
-        try {
-          const response = await fetch(`${BASE_URL}/api/transcribe`, {
-            method: 'POST',
-            body: formData,
-          });
-  
-          if (!response.ok) {
-            throw new Error(`Transcription API error: ${response.status} ${response.statusText}`);
-          }
-  
-          const data = await response.json();
-          console.log('Transcription:', data.text);
-          setMsg(data.text); 
-          getResposnse(data.text);
-        } catch (error) {
-          console.error('Error during transcription:', error);
-        }
-      };
-  
-      mediaRecorder.start(1000);
-      isRecording = true;
-      console.log('Recording started');
-    } catch (error) {
-      console.error('Error initializing recording:', error);
-    }
-  };
-
-  const stopRecording = () => {
-    console.log('Recording stopped');
-    console.log(mediaRecorder, isRecording)
-    if (mediaRecorder && isRecording) {
-      console.log('here')
-      mediaRecorder.stop();
-      isRecording = false; 
-    }
-  };
-
-  const getSessionToken = async () => {
-    const response = await axios.get(`${BASE_URL}/api/start`)
-    console.log("Init", response.data.token)
-    setSessionToken(response.data.token)
-    return response.data.token
-  }
-
-
-  const callBrainywareChatbot = async (userInput, isSessionInit = false) => {
     const startTime = Date.now();
     setLoad(true);
     setSpeak(false);
@@ -388,16 +281,13 @@ function App() {
       setAudioSource(null);
     }
 
-    if (!isSessionInit) {
-      setChats((chats) => [...chats, { msg: userInput, who: 'me' }]);
-      setMsg("");
-    }
+    setChats(chats => [...chats, { msg: userInput, who: 'me' }]);
+    setMsg("");
 
     try {
-      console.log("after", sessionToken)
-      const brainywareUrl = `${BASE_URL}/api/answer_demo`;
+      const brainywareUrl = 'https://dev.brainyware.ai/bw-avatar/answer';
       const formData = new FormData();
-      formData.append('token', sessionToken);
+      formData.append('token', 'DummyTKN');
       formData.append('language', 'it');
       formData.append('transcription', userInput); 
       formData.append('stream', 'false'); 
@@ -408,71 +298,56 @@ function App() {
         body: formData,
       });
 
+      console.log(brainywareResponse)
+
       if (!brainywareResponse.ok) {
         throw new Error(`Brainyware API error: ${brainywareResponse.status} ${brainywareResponse.statusText}`);
       }
 
       const brainywareData = await brainywareResponse.json();
-      // console.log("Brainyware API raw response data:", brainywareData); // DIAGNOSTIC LOG
+      console.log("Brainyware API raw response data:", brainywareData); // DIAGNOSTIC LOG
 
       const responseText = brainywareData.answer; 
       const audioBase64 = brainywareData.audio;
       const audioFormat = brainywareData.audio_format || 'wav';
 
-      // console.log("User input for this request:", userInput); // DIAGNOSTIC LOG
-      // console.log("Text from LLM API (responseText variable):", responseText); // DIAGNOSTIC LOG
+      console.log("User input for this request:", userInput); // DIAGNOSTIC LOG
+      console.log("Text from LLM API (responseText variable):", responseText); // DIAGNOSTIC LOG
 
       if (!responseText || !audioBase64) {
         throw new Error("Incomplete response from Brainyware API (missing text or audio)");
       }
 
-      // console.log("Calling makeSpeech with text:", responseText); // DIAGNOSTIC LOG
+      console.log("Calling makeSpeech with text:", responseText); // DIAGNOSTIC LOG
       const visemeResult = await makeSpeech(responseText);
       const newBlendData = visemeResult.data.blendData;
-      const filename = visemeResult.data.filename;
 
       const audioMimeType = audioFormat.toLowerCase().includes('mp3') ? 'audio/mpeg' : 'audio/wav';
       const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
       const audioBlob = new Blob([audioBytes], { type: audioMimeType });
-      // const audioUrl = URL.createObjectURL(audioBlob);
-      const audioUrl = `${BASE_URL}/api/file/${filename}`;
+      const audioUrl = URL.createObjectURL(audioBlob);
 
       const endTime = Date.now();
       const executionTime = ((endTime - startTime) / 1000).toFixed(1);
-         
-      setChats((prevChats) => [...prevChats, { msg: responseText, who: 'bot', exct: executionTime }]);
-
-      if (isSessionInit) {
-        firstBlendData = newBlendData;
-        firstAudioUrl = audioUrl;
-      }
       
-      // console.log("Setting latestResponse with text:", responseText, "and exct:", executionTime); // DIAGNOSTIC LOG
+      console.log("Setting latestResponse with text:", responseText, "and exct:", executionTime); // DIAGNOSTIC LOG
       setLatestResponse({ text: responseText, exct: executionTime });
 
       setText(responseText);
       setexct(executionTime);
       
       setBlendData(newBlendData || []);
-      
-      if (!isSessionInit) {
-        setAudioSource(audioUrl);
-      }
+      setAudioSource(audioUrl);
 
       setSpeak(true);
+
     } catch (error) {
-      console.error("Error in callBrainywareAPI:", error);
+      console.error("Error in getResponse:", error);
       toast.error(`Error processing request: ${error.message}`);
-      if (!isSessionInit) {
-        setChats((chats) => [...chats, { msg: `Sorry, I encountered an error: ${error.message}`, who: 'bot', exct: '!' }]);
-      }
+      setChats(chats => [...chats, { msg: `Sorry, I encountered an error: ${error.message}`, who: 'bot', exct: '!' }]);
     } finally {
       setLoad(false);
     }
-  }
-  const getResposnse = async (userInput) => {
-    if (!userInput.trim()) return;
-    await callBrainywareChatbot(userInput, false);
   }
 
   useEffect(() => {
@@ -482,29 +357,16 @@ function App() {
   }, [chats])
 
   useEffect(() => {
-    // console.log('Bot message effect triggered. Playing:', playing, 'LatestResponse:', latestResponse, 'Last chat who:', chats.length > 0 ? chats[chats.length -1].who : 'N/A'); // DIAGNOSTIC LOG
+    console.log('Bot message effect triggered. Playing:', playing, 'LatestResponse:', latestResponse, 'Last chat who:', chats.length > 0 ? chats[chats.length -1].who : 'N/A'); // DIAGNOSTIC LOG
     if (playing && latestResponse && chats.length > 0 && chats[chats.length - 1].who === 'me') {
       const { text: botText, exct: botExct } = latestResponse;
-      // console.log('Attempting to add bot message. BotText from latestResponse:', botText, 'Execution time:', botExct); // DIAGNOSTIC LOG
+      console.log('Attempting to add bot message. BotText from latestResponse:', botText, 'Execution time:', botExct); // DIAGNOSTIC LOG
       if (botText && botText !== "Hello I am joi, your 3D virtual assistant.") {
         setChats(prevChats => [...prevChats, { msg: botText, who: 'bot', exct: botExct }]);
         setLatestResponse(null);
       }
     }
   }, [playing, latestResponse, chats]);
-
-  useEffect(() => {
-    const init = async () => {
-      const token = await getSessionToken()
-      // const res = await callBrainywareChatbot("Ciao", true);
-      // console.log(res)
-    }
-    if (sessionToken) {
-      callBrainywareChatbot("Ciao", true);
-    } else {
-      init()
-    }
-  }, [sessionToken])
 
   const playerEnded = useCallback(() => {
     if (audioSource && audioSource.startsWith('blob:')) {
@@ -536,40 +398,31 @@ function App() {
     }
   }, [audioSource]);
 
+  const {
+    transcript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  const startListening = async () => {
+    if (browserSupportsSpeechRecognition) {
+      let res = await SpeechRecognition.startListening()
+    }
+    else {
+      toast.error("Voice recognition not supported by browser.")
+    }
+  };
+
+  const stopListening = () => {
+    getResposnse(msg);
+    SpeechRecognition.stopListening();
+  }
+
+  useEffect(() => {
+    setMsg(transcript);
+  }, [transcript])
+
   return (
     <div className="full">
-        {showStartLayer && ( 
-        <div
-          onClick={!load ? handleStart : null}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.3)",
-            backdropFilter: "blur(10px)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-            cursor: load ? "not-allowed" : "pointer", 
-          }}
-        >
-         <span
-            style={{
-              padding: "15px 30px",
-              fontSize: "18px",
-              color: "#fff",
-              border: "none",
-              borderRadius: "5px",
-              pointerEvents: "none",
-            }}
-          >
-            {load ? "Loading..." : "Click to Start"}
-          </span>
-        </div>
-      )}
       <ToastContainer
         position="top-left"
         autoClose={4000}
@@ -598,32 +451,26 @@ function App() {
         <div className='chat-box'>
           {chats.map((chat, index) => {
             if (chat.who === "me") {
-              return <div key={`${chat.who}-${index}`} className={chat.who}>
+              return <p key={`${chat.who}-${index}`} className={chat.who}>
                 {chat.msg}
-              </div>
+              </p>
             } else {
-              return <div key={`${chat.who}-${index}`} className={chat.who}>
+              return <p key={`${chat.who}-${index}`} className={chat.who}>
                 {chat.msg}
                 {chat.exct !== '!' && chat.exct !== '0' && <div className='time'>{"generated in " + chat.exct + "s"}</div>}
-              </div>
+              </p>
             }
           })}
 
           {(load == true || (speak && !playing)) ? <p style={{ padding: '5px', display: 'flex', alignItems: 'center' }}><lottie-player src="https://lottie.host/8891318b-7fd9-471d-a9f4-e1358fd65cd6/EQt3MHyLWk.json" style={{ width: "50px", height: "50px" }} loop autoplay speed="1.4" direction="1" mode="normal"></lottie-player></p> : <></>}
         </div>
         <div className='msg-box'>
-          <button
-            className="msgbtn"
-            id="mic"
-            onPointerDown={startRecording}
-            onPointerUp={stopRecording}
-            disabled={load || speak}
-          >
-            <img src={`${process.env.PUBLIC_URL}/images/icons/mic.png`} alt="mic" unselectable="on" />
+          <button className='msgbtn' id='mic' onTouchStart={startListening} onMouseDown={startListening} onTouchEnd={stopListening} onMouseUp={stopListening} disabled={load || speak}>
+            <img src='./images/icons/mic.png' alt='mic' unselectable='on'></img>
           </button>
           <input type='text' value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { getResposnse(msg) } }} placeholder='Domanda qualcosa!' disabled={load || speak}></input>
           <button className='msgbtn' id='send' onClick={() => { getResposnse(msg) }} disabled={load || speak}>
-            <img src={`${process.env.PUBLIC_URL}/images/icons/send.png`} alt='send'></img>
+            <img src='./images/icons/send.png' alt='send'></img>
           </button>
         </div>
       </div>
@@ -644,7 +491,7 @@ function App() {
         />
 
         <Suspense fallback={null}>
-          <Environment background={false} files={`${process.env.PUBLIC_URL}/images/photo_studio_loft_hall_1k.hdr`} />
+          <Environment background={false} files="/images/photo_studio_loft_hall_1k.hdr" />
         </Suspense>
 
         <Suspense fallback={null}>
@@ -653,7 +500,7 @@ function App() {
 
         <Suspense fallback={null}>
           <Avatar
-            avatar_url={`${process.env.PUBLIC_URL}/model.glb`}
+            avatar_url="/model.glb"
             blendData={blendData}
             playing={playing}
             setLoad={setLoad}
@@ -666,7 +513,7 @@ function App() {
 }
 
 function Bg() {
-  const texture = useTexture(`${process.env.PUBLIC_URL}/images/background_gaspiu.png`);
+  const texture = useTexture('/images/background.jpg');
 
   return (
     <mesh position={[0, 1.5, -4]} scale={[1.2, 1.2, 1.2]}>
